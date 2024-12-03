@@ -87,10 +87,10 @@ model_cards = {
   "qwq-32b-preview": {
     "layers": 64,
     "repo": {
-      "MLXDynamicShardInferenceEngine": {
-        "repo_id": "mlx-community/QwQ-32B-Preview-8bit",
-        "local_path": "/Users/monkeyfx/.cache/modelscope/hub/okwinds/Qwen2___5-32B-Instruct-MLX-8bit"
-      }
+        "MLXDynamicShardInferenceEngine": {
+            "repo_id": "mlx-community/QwQ-32B-Preview-8bit",
+            "local_path": "/Users/monkeyfx/.cache/modelscope/hub/okwinds/Qwen2___5-32B-Instruct-MLX-8bit"
+        }
     },
   },
 }
@@ -136,10 +136,17 @@ def validate_model_path(path: str) -> bool:
     return all(os.path.exists(os.path.join(path, f)) for f in required_files)
 
 def get_repo(model_id: str, inference_engine_classname: str) -> Optional[str]:
+    # 首先检查环境变量
+    model_path = os.environ.get("EXO_MODEL_PATH")
+    if model_path and os.path.exists(model_path):
+        return model_path
+        
     repo_info = model_cards.get(model_id, {}).get("repo", {}).get(inference_engine_classname, None)
     if isinstance(repo_info, dict):
-        # 优先使用本地路径
-        return repo_info.get("local_path") or repo_info.get("repo_id")
+        local_path = repo_info.get("local_path")
+        if local_path and os.path.exists(local_path):
+            return local_path
+        return repo_info.get("repo_id")
     return repo_info
 
 def build_base_shard(model_id: str, inference_engine_classname: str) -> Optional[Shard]:
