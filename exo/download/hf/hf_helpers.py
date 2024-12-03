@@ -74,7 +74,7 @@ def _add_wildcard_to_directories(pattern: str) -> str:
 
 
 def get_hf_endpoint() -> str:
-  return os.environ.get('HF_ENDPOINT', "https://huggingface.co")
+  return os.environ.get('HF_ENDPOINT', "hhttps://hf-mirror.com")
 
 
 def get_hf_home() -> Path:
