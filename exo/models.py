@@ -85,7 +85,8 @@ model_cards = {
   "qwq-32b-preview": {
     "layers": 64,
     "repo": {
-        "MLXDynamicShardInferenceEngine": "mlx-community/QwQ-32B-Preview-8bit"
+        "MLXDynamicShardInferenceEngine": "mlx-community/QwQ-32B-Preview-4bit",
+        "TinygradDynamicShardInferenceEngine": "KirillR/QwQ-32B-Preview-AWQ",
     },
 },
 }
@@ -123,33 +124,67 @@ pretty_name = {
 }
 
 def get_repo(model_id: str, inference_engine_classname: str) -> Optional[str]:
-  return model_cards.get(model_id, {}).get("repo", {}).get(inference_engine_classname, None)
+    """
+    获取指定模型ID和推理引擎对应的仓库地址
+    
+    Args:
+        model_id: 模型标识符
+        inference_engine_classname: 推理引擎的类名
+    
+    Returns:
+        Optional[str]: 返回仓库地址，如果不存在则返回None
+    """
+    return model_cards.get(model_id, {}).get("repo", {}).get(inference_engine_classname, None)
 
 def build_base_shard(model_id: str, inference_engine_classname: str) -> Optional[Shard]:
-  repo = get_repo(model_id, inference_engine_classname)
-  n_layers = model_cards.get(model_id, {}).get("layers", 0)
-  if repo is None or n_layers < 1:
-    return None
-  return Shard(model_id, 0, 0, n_layers)
+    """
+    构建基础分片对象
+    
+    Args:
+        model_id: 模型标识符
+        inference_engine_classname: 推理引擎的类名
+    
+    Returns:
+        Optional[Shard]: 返回分片对象，如果无法构建则返回None
+    """
+    repo = get_repo(model_id, inference_engine_classname)
+    n_layers = model_cards.get(model_id, {}).get("layers", 0)
+    if repo is None or n_layers < 1:
+        return None
+    return Shard(model_id, 0, 0, n_layers)
 
 def get_supported_models(supported_inference_engine_lists: List[List[str]]) -> List[str]:
-  if not supported_inference_engine_lists:
-    return list(model_cards.keys())
+    """
+    获取支持指定推理引擎列表的所有模型ID
+    
+    Args:
+        supported_inference_engine_lists: 推理引擎列表的列表，每个子列表包含一组可选的引擎
+    
+    Returns:
+        List[str]: 返回支持所有指定推理引擎组合的模型ID列表
+    """
+    # 如果没有指定推理引擎列表，返回所有模型
+    if not supported_inference_engine_lists:
+        return list(model_cards.keys())
 
-  from exo.inference.inference_engine import inference_engine_classes
-  supported_inference_engine_lists = [
-    [inference_engine_classes[engine] if engine in inference_engine_classes else engine for engine in engine_list]
-    for engine_list in supported_inference_engine_lists
-  ]
+    # 导入推理引擎类并转换引擎名称为对应的类名
+    from exo.inference.inference_engine import inference_engine_classes
+    supported_inference_engine_lists = [
+        [inference_engine_classes[engine] if engine in inference_engine_classes else engine for engine in engine_list]
+        for engine_list in supported_inference_engine_lists
+    ]
 
-  def has_any_engine(model_info: dict, engine_list: List[str]) -> bool:
-    return any(engine in model_info.get("repo", {}) for engine in engine_list)
+    def has_any_engine(model_info: dict, engine_list: List[str]) -> bool:
+        """检查模型是否支持引擎列表中的任意一个引擎"""
+        return any(engine in model_info.get("repo", {}) for engine in engine_list)
 
-  def supports_all_engine_lists(model_info: dict) -> bool:
-    return all(has_any_engine(model_info, engine_list)
-              for engine_list in supported_inference_engine_lists)
+    def supports_all_engine_lists(model_info: dict) -> bool:
+        """检查模型是否支持所有引擎组合"""
+        return all(has_any_engine(model_info, engine_list)
+                  for engine_list in supported_inference_engine_lists)
 
-  return [
-    model_id for model_id, model_info in model_cards.items()
-    if supports_all_engine_lists(model_info)
-  ]
+    # 返回满足条件的模型ID列表
+    return [
+        model_id for model_id, model_info in model_cards.items()
+        if supports_all_engine_lists(model_info)
+    ]
