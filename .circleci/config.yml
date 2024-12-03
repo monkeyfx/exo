@@ -205,6 +205,11 @@ jobs:
           model_id: llama-3.2-1b
           prompt: "Keep responses concise. Who was the king of pop?"
           expected_output: "Michael Jackson"
+      - run_chatgpt_api_test:
+          inference_engine: mlx
+          model_id: qwq-32b-preview
+          prompt: "Keep responses concise. What is the capital of France?"
+          expected_output: "Paris"
 
   chatgpt_api_integration_test_dummy:
     macos:

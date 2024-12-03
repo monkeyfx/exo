@@ -1,5 +1,8 @@
 from exo.inference.shard import Shard
 from typing import Optional, List
+from exo.config import Config
+import os
+from pathlib import Path
 
 model_cards = {
   ### llama
@@ -82,6 +85,15 @@ model_cards = {
   "gemma2-27b": { "layers": 46, "repo": { "MLXDynamicShardInferenceEngine": "mlx-community/gemma-2-27b-it-4bit", }, },
   # dummy
   "dummy": { "layers": 8, "repo": { "DummyInferenceEngine": "dummy", }, },
+  "qwq-32b-preview": {
+    "layers": 64,
+    "repo": {
+      "MLXDynamicShardInferenceEngine": {
+        "repo_id": "mlx-community/QwQ-32B-Preview-8bit",
+        "local_path": "/Users/monkeyfx/.cache/modelscope/hub/okwinds/Qwen2___5-32B-Instruct-MLX-8bit"
+      }
+    },
+  },
 }
 
 pretty_name = {
@@ -113,10 +125,23 @@ pretty_name = {
   "qwen-2.5-math-72b": "Qwen 2.5 72B (Math)",
   "llama-3-8b": "Llama 3 8B",
   "llama-3-70b": "Llama 3 70B",
+  "qwq-32b-preview": "QwQ 32B Preview",
 }
 
+def validate_model_path(path: str) -> bool:
+    """验证模型路径是否有效"""
+    if not os.path.exists(path):
+        return False
+    # 检查必要的模型文件
+    required_files = ["config.json", "tokenizer.json"]
+    return all(os.path.exists(os.path.join(path, f)) for f in required_files)
+
 def get_repo(model_id: str, inference_engine_classname: str) -> Optional[str]:
-  return model_cards.get(model_id, {}).get("repo", {}).get(inference_engine_classname, None)
+    repo_info = model_cards.get(model_id, {}).get("repo", {}).get(inference_engine_classname, None)
+    if isinstance(repo_info, dict):
+        # 优先使用本地路径
+        return repo_info.get("local_path") or repo_info.get("repo_id")
+    return repo_info
 
 def build_base_shard(model_id: str, inference_engine_classname: str) -> Optional[Shard]:
   repo = get_repo(model_id, inference_engine_classname)
