@@ -1,6 +1,5 @@
 from exo.inference.shard import Shard
 from typing import Optional, List
-from exo.config import Config
 import os
 from pathlib import Path
 
