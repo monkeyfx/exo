@@ -86,7 +86,6 @@ model_cards = {
     "layers": 64,
     "repo": {
         "MLXDynamicShardInferenceEngine": "mlx-community/QwQ-32B-Preview-4bit",
-        "TinygradDynamicShardInferenceEngine": "KirillR/QwQ-32B-Preview-AWQ",
     },
 },
 }

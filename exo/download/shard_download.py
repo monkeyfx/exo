@@ -7,30 +7,65 @@ from exo.helpers import AsyncCallbackSystem
 
 
 class ShardDownloader(ABC):
-  @abstractmethod
-  async def ensure_shard(self, shard: Shard, inference_engine_name: str) -> Path:
     """
-        Ensures that the shard is downloaded.
-        Does not allow multiple overlapping downloads at once.
-        If you try to download a Shard which overlaps a Shard that is already being downloaded,
-        the download will be cancelled and a new download will start.
+    分片下载器的抽象基类
+    负责管理模型分片的下载过程，确保不会有重复的下载任务
+    """
+    
+    @abstractmethod
+    async def ensure_shard(self, shard: Shard, inference_engine_name: str) -> Path:
+        """
+        确保分片已被下载到本地
+        如果尝试下载一个与正在下载的分片重叠的分片，
+        当前的下载会被取消，并开始新的下载
 
         Args:
-            shard (Shard): The shard to download.
-            inference_engine_name (str): The inference engine used on the node hosting the shard
-        """
-    pass
+            shard: 需要下载的分片对象
+            inference_engine_name: 托管该分片的推理引擎名称
 
-  @property
-  @abstractmethod
-  def on_progress(self) -> AsyncCallbackSystem[str, Tuple[Shard, RepoProgressEvent]]:
-    pass
+        Returns:
+            Path: 下载文件的本地路径
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def on_progress(self) -> AsyncCallbackSystem[str, Tuple[Shard, RepoProgressEvent]]:
+        """
+        下载进度回调系统
+        用于通知下载进度事件
+
+        Returns:
+            AsyncCallbackSystem: 异步回调系统，处理(分片, 进度事件)元组
+        """
+        pass
 
 
 class NoopShardDownloader(ShardDownloader):
-  async def ensure_shard(self, shard: Shard, inference_engine_name: str) -> Path:
-    return Path("/tmp/noop_shard")
+    """
+    空操作分片下载器
+    用于测试或特殊场景，不执行实际的下载操作
+    """
+    
+    async def ensure_shard(self, shard: Shard, inference_engine_name: str) -> Path:
+        """
+        模拟分片下载
+        
+        Args:
+            shard: 分片对象（未使用）
+            inference_engine_name: 推理引擎名称（未使用）
 
-  @property
-  def on_progress(self) -> AsyncCallbackSystem[str, Tuple[Shard, RepoProgressEvent]]:
-    return AsyncCallbackSystem()
+        Returns:
+            Path: 固定的临时路径
+        """
+        return Path("/tmp/noop_shard")
+
+    @property
+    def on_progress(self) -> AsyncCallbackSystem[str, Tuple[Shard, RepoProgressEvent]]:
+        """
+        提供空的进度回调系统
+
+        Returns:
+            AsyncCallbackSystem: 空的异步回调系统
+        """
+        return AsyncCallbackSystem()

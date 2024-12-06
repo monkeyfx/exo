@@ -31,21 +31,22 @@ class ModelNotFoundError(Exception):
     super().__init__(self.message)
 
 
+# 模型类型的重映射关系，用于处理兼容性
 MODEL_REMAPPING = {
-  "mistral": "llama",  # mistral is compatible with llama
+  "mistral": "llama",  # mistral 模型与 llama 架构兼容
   "phi-msft": "phixtral",
 }
 
 
 def _get_classes(config: dict):
   """
-  Retrieve the model and model args classes based on the configuration.
-
+  根据配置获取模型和模型参数类。
+  
   Args:
-   config (dict): The model configuration.
-
+    config (dict): 模型配置字典
+  
   Returns:
-   A tuple containing the Model class and the ModelArgs class.
+    tuple: 返回 (Model类, ModelArgs类) 的元组
   """
   model_type = config["model_type"]
   model_type = MODEL_REMAPPING.get(model_type, model_type)
@@ -76,27 +77,21 @@ def load_model_shard(
   model_config: dict = {},
 ) -> nn.Module:
   """
-  Load and initialize the model from a given path.
-
+  从指定路径加载并初始化模型分片。
+  
   Args:
-   model_path (Path): The path to load the model from.
-   lazy (bool): If False eval the model parameters to make sure they are
-    loaded in memory before returning, otherwise they will be loaded
-    when needed. Default: ``False``
-   model_config(dict, optional): Configuration parameters for the model.
-    Defaults to an empty dictionary.
-
+    model_path (Path): 模型路径
+    shard (Shard): 分片配置对象，定义了当前分片的层范围
+    lazy (bool): 如果为False，立即加载模型参数到内存；如果为True，则按需加载
+    model_config (dict): 额外的模型配置参数
+  
   Returns:
-   nn.Module: The loaded and initialized model.
-
-  Raises:
-   FileNotFoundError: If the weight files (.safetensors) are not found.
-   ValueError: If the model class or args class are not found or cannot be instantiated.
+    nn.Module: 加载并初始化好的模型
   """
   config = load_config(model_path)
   config.update(model_config)
 
-  # TODO hack
+  # 添加分片配置信息到模型配置中
   config["shard"] = {
     "model_id": model_path.name,
     "start_layer": shard.start_layer,
@@ -132,6 +127,9 @@ def load_model_shard(
   model_class, model_args_class = _get_classes(config=config)
 
   class ShardedModel(model_class):
+    """
+    对模型类进行包装，添加分片支持
+    """
     def __init__(self, args):
       super().__init__(args)
       self.shard = Shard(args.shard.model_id, args.shard.start_layer, args.shard.end_layer, args.shard.n_layers)
@@ -175,6 +173,20 @@ async def load_shard(
   adapter_path: Optional[str] = None,
   lazy: bool = False,
 ) -> Tuple[nn.Module, TokenizerWrapper]:
+  """
+  异步加载模型分片和对应的分词器
+  
+  Args:
+    model_path: 模型路径
+    shard: 分片配置
+    tokenizer_config: 分词器配置
+    model_config: 模型配置
+    adapter_path: 适配器路径（可选）
+    lazy: 是否延迟加载模型参数
+    
+  Returns:
+    tuple: 返回 (模型, 分词器) 的元组
+  """
   model = load_model_shard(model_path, shard, lazy, model_config)
 
   # TODO: figure out a generic solution
@@ -189,6 +201,18 @@ async def load_shard(
 
 
 async def get_image_from_str(_image_str: str):
+  """
+  从URL或base64字符串加载图像
+  
+  Args:
+    _image_str: 图像URL或base64编码的图像数据
+    
+  Returns:
+    PIL.Image: 加载的RGB格式图像
+    
+  Raises:
+    ValueError: 当输入格式不正确时抛出
+  """
   image_str = _image_str.strip()
 
   if image_str.startswith("http"):

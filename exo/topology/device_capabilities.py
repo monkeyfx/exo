@@ -4,14 +4,15 @@ from exo import DEBUG
 import subprocess
 import psutil
 
+# 定义基本的TFLOPS单位
 TFLOPS = 1.00
 
 
 class DeviceFlops(BaseModel):
-  # units of TFLOPS
-  fp32: float
-  fp16: float
-  int8: float
+  # 存储设备的计算能力（单位：TFLOPS）
+  fp32: float  # 32位浮点运算性能
+  fp16: float  # 16位浮点运算性能
+  int8: float  # 8位整数运算性能
 
   def __str__(self):
     return f"fp32: {self.fp32 / TFLOPS:.2f} TFLOPS, fp16: {self.fp16 / TFLOPS:.2f} TFLOPS, int8: {self.int8 / TFLOPS:.2f} TFLOPS"
@@ -21,15 +22,17 @@ class DeviceFlops(BaseModel):
 
 
 class DeviceCapabilities(BaseModel):
-  model: str
-  chip: str
-  memory: int
-  flops: DeviceFlops
+  # 存储设备的基本信息和性能参数
+  model: str      # 设备型号
+  chip: str       # 芯片型号
+  memory: int     # 内存大小(MB)
+  flops: DeviceFlops  # 计算性能
 
   def __str__(self):
     return f"Model: {self.model}. Chip: {self.chip}. Memory: {self.memory}MB. Flops: {self.flops}"
 
   def model_post_init(self, __context: Any) -> None:
+    # 初始化后处理：确保flops是DeviceFlops对象
     if isinstance(self.flops, dict):
       self.flops = DeviceFlops(**self.flops)
 
@@ -37,7 +40,13 @@ class DeviceCapabilities(BaseModel):
     return {"model": self.model, "chip": self.chip, "memory": self.memory, "flops": self.flops.to_dict()}
 
 
-UNKNOWN_DEVICE_CAPABILITIES = DeviceCapabilities(model="Unknown Model", chip="Unknown Chip", memory=0, flops=DeviceFlops(fp32=0, fp16=0, int8=0))
+# 定义未知设备的默认能力
+UNKNOWN_DEVICE_CAPABILITIES = DeviceCapabilities(
+    model="Unknown Model", 
+    chip="Unknown Chip", 
+    memory=0, 
+    flops=DeviceFlops(fp32=0, fp16=0, int8=0)
+)
 
 CHIP_FLOPS = {
   # Source: https://www.cpu-monkey.com
@@ -145,6 +154,10 @@ CHIP_FLOPS.update({f"{key} Laptop GPU": value for key, value in CHIP_FLOPS.items
 
 
 def device_capabilities() -> DeviceCapabilities:
+  """
+  获取当前设备的性能参数
+  根据操作系统类型调用相应的实现
+  """
   if psutil.MACOS:
     return mac_device_capabilities()
   elif psutil.LINUX:
@@ -159,39 +172,56 @@ def device_capabilities() -> DeviceCapabilities:
 
 
 def mac_device_capabilities() -> DeviceCapabilities:
-  # Fetch the model of the Mac using system_profiler
+  """
+  获取Mac设备的性能参数
+  使用system_profiler获取硬件信息
+  """
+  # 使用system_profiler获取设备信息
   model = subprocess.check_output(["system_profiler", "SPHardwareDataType"]).decode("utf-8")
+  
+  # 解析设备型号
   model_line = next((line for line in model.split("\n") if "Model Name" in line), None)
   model_id = model_line.split(": ")[1] if model_line else "Unknown Model"
+  
+  # 解析芯片信息
   chip_line = next((line for line in model.split("\n") if "Chip" in line), None)
   chip_id = chip_line.split(": ")[1] if chip_line else "Unknown Chip"
+  
+  # 解析内存信息
   memory_line = next((line for line in model.split("\n") if "Memory" in line), None)
   memory_str = memory_line.split(": ")[1] if memory_line else "Unknown Memory"
   memory_units = memory_str.split()
   memory_value = int(memory_units[0])
-  if memory_units[1] == "GB":
-    memory = memory_value*1024
-  else:
-    memory = memory_value
+  memory = memory_value*1024 if memory_units[1] == "GB" else memory_value
 
-  # Assuming static values for other attributes for demonstration
-  return DeviceCapabilities(model=model_id, chip=chip_id, memory=memory, flops=CHIP_FLOPS.get(chip_id, DeviceFlops(fp32=0, fp16=0, int8=0)))
+  return DeviceCapabilities(
+    model=model_id, 
+    chip=chip_id, 
+    memory=memory, 
+    flops=CHIP_FLOPS.get(chip_id, DeviceFlops(fp32=0, fp16=0, int8=0))
+  )
 
 
 def linux_device_capabilities() -> DeviceCapabilities:
+  """
+  获取Linux设备的性能参数
+  主要处理NVIDIA和AMD显卡的情况
+  """
   import psutil
   from tinygrad import Device
 
   if DEBUG >= 2: print(f"tinygrad {Device.DEFAULT=}")
-  if Device.DEFAULT == "CUDA" or Device.DEFAULT == "NV" or Device.DEFAULT == "GPU":
+  
+  # 处理NVIDIA显卡
+  if Device.DEFAULT in ["CUDA", "NV", "GPU"]:
     import pynvml
 
     pynvml.nvmlInit()
     handle = pynvml.nvmlDeviceGetHandleByIndex(0)
     gpu_raw_name = pynvml.nvmlDeviceGetName(handle).upper()
+    # 处理GPU名称，移除末尾的GB标记
     gpu_name = gpu_raw_name.rsplit(" ", 1)[0] if gpu_raw_name.endswith("GB") else gpu_raw_name
     gpu_memory_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-
     if DEBUG >= 2: print(f"NVIDIA device {gpu_name=} {gpu_memory_info=}")
 
     return DeviceCapabilities(
@@ -200,6 +230,8 @@ def linux_device_capabilities() -> DeviceCapabilities:
       memory=gpu_memory_info.total // 2**20,
       flops=CHIP_FLOPS.get(gpu_name, DeviceFlops(fp32=0, fp16=0, int8=0)),
     )
+  
+  # AMD显卡支持（待实现）
   elif Device.DEFAULT == "AMD":
     # TODO AMD support
     return DeviceCapabilities(
@@ -208,6 +240,8 @@ def linux_device_capabilities() -> DeviceCapabilities:
       memory=psutil.virtual_memory().total // 2**20,
       flops=DeviceFlops(fp32=0, fp16=0, int8=0),
     )
+  
+  # 其他设备情况
   else:
     return DeviceCapabilities(
       model=f"Linux Box (Device: {Device.DEFAULT})",
